@@ -36,7 +36,7 @@ pip install -r requirements.txt
 Serve the model via a REST API using FastAPI and Uvicorn:
 
 ```bash
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+uvicorn app:app --reload --host 0.0.0.0 --port 8000
 ```
 
 - `http://localhost:8000/upload-images` – Upload images dataset
