@@ -4,19 +4,39 @@ import matplotlib.pyplot as plt
 
 from tensorflow.keras.models import Model
 from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, Dense, Input
+from tensorflow.keras.applications import MobileNetV2
 
 # ================== CNN Model ==================
 def create_cnn(input_shape, num_classes):
+    # Input shape must be at least (32, 32, 3), but typically 224x224x3 for ImageNet models
     inputs = Input(shape=input_shape)
-    x = Conv2D(32, (3, 3), activation='relu', name='conv1')(inputs)
-    x = MaxPooling2D((2, 2))(x)
-    x = Conv2D(64, (3, 3), activation='relu', name='conv2')(x)
-    x = MaxPooling2D((2, 2))(x)
-    x = Flatten()(x)
+
+    # Load pretrained base model (ImageNet weights)
+    base_model = MobileNetV2(
+        weights='imagenet',
+        include_top=False,  # Remove final classification layer
+        input_tensor=inputs,  # Use our input
+        pooling='avg'  # Global average pooling
+    )
+
+    # Freeze the base model (optional: train only the top layer first)
+    base_model.trainable = False
+
+    # Add custom head
+    x = base_model.output
     x = Dense(64, activation='relu')(x)
     outputs = Dense(num_classes, activation='softmax')(x)
+
+    # Create model
     model = Model(inputs=inputs, outputs=outputs)
-    model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+
+    # Compile
+    model.compile(
+        optimizer='adam',
+        loss='categorical_crossentropy',
+        metrics=['accuracy']
+    )
+
     return model
 
 def plot_cnn_feature_maps(model, image, layer_name='conv1', save_path=None):
