@@ -11,8 +11,27 @@ def is_allowed_file(filename: str, allowed_extension) -> bool:
 
 # ================== Load Dataset ==================
 def load_images_from_folder(path, image_size, color_mode="rgb"):
+    # Check if the main path exists and is a directory
+    if not os.path.exists(path):
+        print("[ERROR] No such file or directory: '{}'".format(path))
+        raise FileNotFoundError(f"[ERROR] Dataset does not exist")
+    if not os.path.isdir(path):
+        print("[ERROR] No such directory: '{}'".format(path))
+        raise NotADirectoryError(f"[ERROR] Dataset path is not a directory")
+
+    # Get subdirectories (assumed to be class folders)
+    subdirs = [d for d in os.listdir(path) if os.path.isdir(os.path.join(path, d))]
+
+    if len(subdirs) < 2:
+        raise ValueError(
+            f"[ERROR] Insufficient class directories. Found {len(subdirs)} directories, but at least 2 are required.\n"
+            f"Found directories: {subdirs}"
+        )
+
+    print(f"[INFO] Found {len(subdirs)} classes: {subdirs}")
+
     X, y = [], []
-    label_names = sorted(os.listdir(path))  # Ensure consistent ordering
+    label_names = sorted(subdirs)  # Ensure consistent ordering
     for label in label_names:
         folder_path = os.path.join(path, label)
         if not os.path.isdir(folder_path):

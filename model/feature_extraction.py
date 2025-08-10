@@ -16,7 +16,7 @@ def extract_lda(X_train, y_train, n_components=3):
     return X_lda, lda
 
 def extract_ica(X_train, n_components=100):
-    ica = FastICA(n_components=n_components, random_state=42, max_iter=400)
+    ica = FastICA(n_components=n_components, whiten='arbitrary-variance', max_iter=1000, tol=1e-4)
     X_flat = X_train.reshape(X_train.shape[0], -1)
     X_ica = ica.fit_transform(X_flat)
     return X_ica, ica

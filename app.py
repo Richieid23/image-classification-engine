@@ -27,9 +27,9 @@ app = FastAPI()
 
 # ================== Configuration ==================
 IMAGE_SIZE = (244, 244)  # Resize all images to this size
-N_COMPONENTS_PCA = 100
+N_COMPONENTS_PCA = 50
 N_COMPONENTS_LDA = 3
-N_COMPONENTS_ICA = 100
+N_COMPONENTS_ICA = 50
 COLOR_MODE = "rgb"  # Change to "gray" for grayscale; "rgb" for color
 UPLOAD_DIR = Path("storage/dataset")
 OUTPUT_DIR = Path("storage/output")
@@ -61,7 +61,7 @@ async def upload_images(
         files: list[UploadFile] = File(...)
 ):
     if not files or all(f.filename == "" for f in files):
-        raise HTTPException(status_code=400, detail="No files uploaded")
+        return JSONResponse(content={"success": False, "message": "No files uploaded"}, status_code=400)
 
     total_size = 0
     saved_files = []
@@ -69,30 +69,24 @@ async def upload_images(
     for file in files:
         # Validate file extension
         if not is_allowed_file(file.filename, ALLOWED_EXTENSIONS):
-            raise HTTPException(status_code=400, detail=f"File type not allowed: {file.filename}")
+            return JSONResponse(content={"success": False, "message": f"File type not allowed: {file.filename}"}, status_code=400)
 
         # Read file to check size
         contents = await file.read()
         total_size += len(contents)
 
         if len(contents) > MAX_FILE_SIZE:
-            raise HTTPException(
-                status_code=413,
-                detail=f"File {file.filename} exceeds the maximum size of {MAX_FILE_SIZE / (1024*1024):.1f} MB"
-            )
+            return JSONResponse(content={"success": False, "message": f"File {file.filename} exceeds the maximum size of {MAX_FILE_SIZE / (1024*1024):.1f} MB"}, status_code=413)
 
         # Reset file pointer after reading
         await file.seek(0)
 
     if total_size > MAX_TOTAL_SIZE:
-        raise HTTPException(
-            status_code=413,
-            detail=f"Total upload size exceeds the limit of {MAX_TOTAL_SIZE / (1024*1024):.1f} MB"
-        )
+        return JSONResponse(content={"success": False, "message": f"Total upload size exceeds the limit of {MAX_TOTAL_SIZE / (1024*1024):.1f} MB"}, status_code=413)
 
     # Save files
-    path = category + "_" + label
-    upload_path = UPLOAD_DIR / path
+    # path = category + "_" + label
+    upload_path = UPLOAD_DIR / category / label.lower()
     upload_path.mkdir(parents=True, exist_ok=True)  # Ensure directory exists
 
     for file in files:
@@ -106,15 +100,19 @@ async def upload_images(
                 await f.write(await file.read())
             saved_files.append(str(file_path))
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Error saving file {file.filename}: {str(e)}")
+            return JSONResponse(content={"success": False,
+                                     "message": f"Error saving file {file.filename}: {str(e)}"}, status_code=500)
         finally:
             await file.close()
 
     return JSONResponse(
         content={
+            "success": True,
             "message": f"Successfully uploaded {len(saved_files)} files",
-            "files": saved_files,
-            "total_size_mb": round(total_size / (1024 * 1024), 2)
+            "data" : {
+                "files": saved_files,
+                "total_size_mb": round(total_size / (1024 * 1024), 2)
+            }
         },
         status_code=201
     )
@@ -125,7 +123,7 @@ async def train(request: Train):
         print("[INFO] Loading dataset...")
         dataset_path = request.path
         if request.path is None:
-            dataset_path = "storage/dataset"
+            dataset_path = "storage/dataset/"+request.category
 
         X, y = load_images_from_folder(dataset_path, image_size=IMAGE_SIZE, color_mode=COLOR_MODE)
         print(f"[INFO] Loaded {len(X)} images with shape {X.shape[1:]}")
@@ -155,7 +153,11 @@ async def train(request: Train):
             case "PCA":
                 # 2. PCA
                 print("[INFO] Applying PCA...")
-                X_train_pca, pca = extract_pca(X_train, N_COMPONENTS_PCA)
+                print("Number of samples (n_samples):", X_train.shape[0])
+                print("Number of features (n_features):", X_train.shape[1])
+                print("Max n_components allowed:", min(X_train.shape[0], X_train.shape[1]))
+                n_components = min(N_COMPONENTS_PCA, X_train.shape[0], X_train.shape[1])
+                X_train_pca, pca = extract_pca(X_train, n_components)
                 X_test_pca = pca.transform(X_test_flat)
                 plot_components("Eigenface", pca.components_, IMAGE_SIZE + (3,) if COLOR_MODE == "rgb" else IMAGE_SIZE,
                                 save_path=plot_path)
@@ -175,7 +177,11 @@ async def train(request: Train):
             case "ICA":
                 # 5. ICA
                 print("[INFO] Applying ICA...")
-                X_train_ica, ica = extract_ica(X_train, N_COMPONENTS_ICA)
+                print("Number of samples (n_samples):", X_train.shape[0])
+                print("Number of features (n_features):", X_train.shape[1])
+                print("Max n_components allowed:", min(X_train.shape[0], X_train.shape[1]))
+                n_components = min(N_COMPONENTS_ICA, X_train.shape[0], X_train.shape[1])
+                X_train_ica, ica = extract_ica(X_train, n_components)
                 X_test_ica = ica.transform(X_test_flat)
                 plot_components("ICA Component", ica.components_,
                                 IMAGE_SIZE + (3,) if COLOR_MODE == "rgb" else IMAGE_SIZE,
@@ -213,7 +219,7 @@ async def train(request: Train):
                     # Only process metrics for individual classes (which are dictionaries)
                     if isinstance(metrics, dict):
                         results.append({
-                            'label': str(label),  # Convert numpy string to regular string
+                            'classifier': str(label),  # Convert numpy string to regular string
                             'model': 'CNN',
                             'accuracy': overall_accuracy,  # Include overall accuracy for each class entry
                             'precision': metrics['precision'],
@@ -225,7 +231,7 @@ async def train(request: Train):
 
                 # Visualize CNN feature maps
                 idx = np.random.randint(0, len(X_test_norm))
-                plot_cnn_feature_maps(cnn_model, X_test_norm[idx], layer_name='conv1',
+                plot_cnn_feature_maps(cnn_model, X_test_norm[idx], layer_name='Conv1',
                                       save_path=plot_path)
                 plot_cnn_matrics(results_dic, le.classes_, graph_path)
             case _:

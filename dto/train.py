@@ -7,3 +7,4 @@ class Train(BaseModel):
     featureMethod: str  # PCA, LDA, ICA, CNN
     classifierMethods: List[str] | None = None  # SVM, KNN, NB, RF, DT
     path: str | None = None
+    category: str | None = None
