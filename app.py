@@ -125,6 +125,8 @@ async def train(request: Train):
         if request.path is None:
             dataset_path = "storage/dataset/"+request.category
 
+        COLOR_MODE = "gray" if request.category == "3" else "rgb"
+
         X, y = load_images_from_folder(dataset_path, image_size=IMAGE_SIZE, color_mode=COLOR_MODE)
         print(f"[INFO] Loaded {len(X)} images with shape {X.shape[1:]}")
 
