@@ -1,3 +1,6 @@
+import os
+import shutil
+
 import uvicorn
 import uuid
 import aiofiles
@@ -33,6 +36,7 @@ N_COMPONENTS_ICA = 50
 COLOR_MODE = "rgb"  # Change to "gray" for grayscale; "rgb" for color
 UPLOAD_DIR = Path("storage/dataset")
 OUTPUT_DIR = Path("storage/output")
+DATASET_DIR = 'storage/dataset'
 MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 MB per file
 MAX_TOTAL_SIZE = 200 * 1024 * 1024  # 200 MB total for all files
 ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
@@ -49,6 +53,14 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Define synchronized colors for all plots
+metric_colors = {
+    'Accuracy': '#1f77b4',   # blue
+    'Precision': '#ff7f0e',  # orange
+    'Recall': '#2ca02c',     # green
+    'F1-Score': '#d62728'    # red
+}
 
 # Mount the directory to serve static files
 app.mount("/static", StaticFiles(directory=OUTPUT_DIR), name="static")
@@ -250,8 +262,24 @@ async def train(request: Train):
 
         return JSONResponse(content={"success": True, "message": "Training completed", "data": data})
     except Exception as e:
-        return JSONResponse(content={"success": False, "message": str(e)})
+        return JSONResponse(content={"success": False, "message": str(e)}, status_code=500)
 
+@app.delete("/clear-dataset")
+def clear_dataset():
+    if not os.path.exists(DATASET_DIR):
+        return JSONResponse(status_code=404, content={"success": False, "message": "Dataset directory not found"})
+
+    # Delete everything inside the folder
+    try:
+        for item in os.listdir(DATASET_DIR):
+            item_path = os.path.join(DATASET_DIR, item)
+            if os.path.isfile(item_path) or os.path.islink(item_path):
+                os.remove(item_path)  # remove file or symbolic link
+            elif os.path.isdir(item_path):
+                shutil.rmtree(item_path)  # remove directory
+        return {"status": "success", "message": "All files and directories deleted from dataset folder"}
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"success": False, "message": f"Error deleting files: {str(e)}"})
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)

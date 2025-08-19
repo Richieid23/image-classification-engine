@@ -1,5 +1,6 @@
 import os
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 
 from tensorflow.keras.models import Model
@@ -7,6 +8,14 @@ from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, Dense, Input
 from tensorflow.keras.applications import MobileNetV2
 
 # ================== CNN Model ==================
+# Define synchronized colors for all plots
+metric_colors = {
+    'Accuracy': '#1f77b4',   # blue
+    'Precision': '#ff7f0e',  # orange
+    'Recall': '#2ca02c',     # green
+    'F1-Score': '#d62728'    # red
+}
+
 def create_cnn(input_shape, num_classes):
     # Input shape must be at least (32, 32, 3), but typically 224x224x3 for ImageNet models
     inputs = Input(shape=input_shape)
@@ -61,38 +70,42 @@ def plot_cnn_feature_maps(model, image, layer_name='conv1', save_path=None):
         plt.show()
     plt.close()
 
-def plot_cnn_matrics(result_dict, class_labels, save_path):
-
+def plot_cnn_matrics(result_dict, class_labels, save_path=None):
     # Extract precision, recall, f1-score per class (excluding accuracy, macro avg, etc.)
-    precision = [result_dict[label]["precision"] for label in class_labels]
-    recall = [result_dict[label]["recall"] for label in class_labels]
-    f1 = [result_dict[label]["f1-score"] for label in class_labels]
+    accuracy = [result_dict["accuracy"] * 100 for _ in class_labels]
+    precision = [result_dict[label]["precision"] * 100 for label in class_labels]  # convert to %
+    recall = [result_dict[label]["recall"] * 100 for label in class_labels]        # convert to %
+    f1 = [result_dict[label]["f1-score"] * 100 for label in class_labels]          # convert to %
 
     # Plot bar chart
     x = np.arange(len(class_labels))
-    width = 0.25
+    width = 0.2
 
-    fig, ax = plt.subplots(figsize=(12, 6))
-    rects1 = ax.bar(x - width, precision, width, label='Precision', color='skyblue')
-    rects2 = ax.bar(x, recall, width, label='Recall', color='lightgreen')
-    rects3 = ax.bar(x + width, f1, width, label='F1-Score', color='salmon')
+    fig, ax = plt.subplots(figsize=(14, 6))
+    rects0 = ax.bar(x - 1.5 * width, accuracy, width, label='Accuracy', color=metric_colors['Accuracy'])
+    rects1 = ax.bar(x - 0.5 * width, precision, width, label='Precision', color=metric_colors['Precision'])
+    rects2 = ax.bar(x + 0.5 * width, recall, width, label='Recall', color=metric_colors['Recall'])
+    rects3 = ax.bar(x + 1.5 * width, f1, width, label='F1-Score', color=metric_colors['F1-Score'])
 
-    ax.set_ylabel('Scores')
+
+    ax.set_ylabel('Scores (%)')
     ax.set_title('CNN Classification Report by Class')
     ax.set_xticks(x)
     ax.set_xticklabels(class_labels, rotation=45, ha='right')
-    ax.set_ylim(0, 1.1)
+    ax.set_ylim(0, 110)  # percentage scale
     ax.legend()
 
     def autolabel(rects):
+        """Attach a text label above each bar with its value as %"""
         for rect in rects:
             height = rect.get_height()
-            ax.annotate(f'{height:.2f}',
+            ax.annotate(f'{height:.0f}%',   # no decimals
                         xy=(rect.get_x() + rect.get_width() / 2, height),
                         xytext=(0, 3),
                         textcoords="offset points",
                         ha='center', va='bottom')
 
+    autolabel(rects0)
     autolabel(rects1)
     autolabel(rects2)
     autolabel(rects3)

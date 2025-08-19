@@ -5,6 +5,14 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 # ================== Visualization ==================
+# Define synchronized colors for all plots
+metric_colors = {
+    'Accuracy': '#1f77b4',   # blue
+    'Precision': '#ff7f0e',  # orange
+    'Recall': '#2ca02c',     # green
+    'F1-Score': '#d62728'    # red
+}
+
 def plot_components(method, components, original_image_shape, n_components=25, save_path=None):
     n_cols = 5
     n_rows = (n_components + n_cols - 1) // n_cols
@@ -52,34 +60,44 @@ def plot_fisherfaces(pca, lda, original_image_shape, n_components=25, save_path=
     fisherfaces = fisherfaces[:n_components]
     plot_components("Fisherface", fisherfaces, original_image_shape, n_components, save_path)
 
-def plot_metrics(result, save_path=None):
-    # Isi DataFrame dengan hasil
+def plot_metrics(result, save_path=None, bar_width=0.6):
     rows = []
     for metrics in result:
         rows.append({
             'Model': metrics['classifier'] + ' x ' + metrics['model'],
-            'Accuracy': metrics['accuracy'],
-            'Precision': metrics['precision'],
-            'Recall': metrics['recall'],
-            'F1-Score': metrics['f1']
+            'Accuracy': metrics['accuracy'] * 100,
+            'Precision': metrics['precision'] * 100,
+            'Recall': metrics['recall'] * 100,
+            'F1-Score': metrics['f1'] * 100
         })
 
     summary_df = pd.DataFrame(rows)
 
-    # Set figure size and style
+    ax = summary_df.set_index('Model').plot(
+        kind='bar',
+        figsize=(12, 6),
+        width=bar_width,
+        color=[metric_colors[col] for col in summary_df.columns if col != 'Model']
+    )
 
-    plt.figure(figsize=(10, 6))
-    summary_df.set_index('Model').plot(kind='bar', figsize=(10, 6), colormap='tab10')
-
-    # Title and labels
     plt.title('Model Performance Comparison')
     plt.xlabel('Model')
-    plt.ylabel('Score')
-    plt.ylim(0, 1.1)  # Score ranges from 0 to 1
+    plt.ylabel('Score (%)')
+    plt.ylim(0, 110)
     plt.grid(axis='y')
     plt.legend(loc='lower right')
-    plt.tight_layout()
 
+    # Add value labels
+    for p in ax.patches:
+        ax.annotate(
+            f'{int(round(p.get_height()))}%',
+            (p.get_x() + p.get_width() / 2., p.get_height()),
+            ha='center', va='bottom',
+            fontsize=8, color='black',
+            xytext=(0, 3), textcoords='offset points'
+        )
+
+    plt.tight_layout()
     if save_path:
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
         plt.savefig(save_path, dpi=150, bbox_inches='tight')
